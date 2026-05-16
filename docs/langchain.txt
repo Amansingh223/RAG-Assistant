@@ -1,0 +1,43 @@
+LangChain Documentation
+
+LangChain is a framework for developing applications powered by large language models (LLMs).
+
+Core Components:
+1. Chains
+2. Agents
+3. Memory
+4. Retrieval
+5. Tool Calling
+
+LangChain supports Retrieval-Augmented Generation (RAG) systems.
+
+RAG workflow:
+- Load documents
+- Split documents into chunks
+- Create embeddings
+- Store embeddings in vector database
+- Retrieve relevant chunks
+- Generate answer using LLM
+
+LangGraph is built for creating stateful and agentic workflows.
+
+FastAPI is commonly used to serve LangChain applications through APIs.
+
+LangGraph is a framework for building stateful and multi-agent AI applications.
+
+LangGraph allows developers to create cyclic workflows using nodes and edges.
+
+Key Features of LangGraph:
+1. Stateful workflows
+2. Conditional routing
+3. Retry mechanisms
+4. Multi-agent orchestration
+5. Human-in-the-loop support
+
+LangGraph is commonly used for:
+- Agentic RAG systems
+- Self-corrective AI pipelines
+- AI orchestration
+- Workflow automation
+
+LangGraph integrates deeply with LangChain.

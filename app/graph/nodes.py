@@ -1,0 +1,288 @@
+from dotenv import load_dotenv
+import os
+
+from langchain_groq import ChatGroq
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+
+from app.graph.state import GraphState
+
+
+load_dotenv()
+
+
+# LLM Model
+llm = ChatGroq(
+    api_key=os.getenv("GROQ_API_KEY"),
+    model="llama-3.1-8b-instant"
+)
+
+
+# Tavily Search
+web_search_tool = TavilySearchResults(
+    max_results=3
+)
+
+
+# Embeddings
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+
+# DB Path
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(__file__)
+    )
+)
+
+DB_PATH = os.path.join(BASE_DIR, "langgraph_db")
+
+print(f"\nDB PATH: {DB_PATH}")
+
+
+# Vector Store
+vectorstore = Chroma(
+    persist_directory=DB_PATH,
+    embedding_function=embeddings
+)
+
+
+# Retriever
+retriever = vectorstore.as_retriever(
+    search_kwargs={"k": 3}
+)
+
+
+# Test DB
+test_docs = retriever.invoke("LangGraph")
+
+print(f"\nTEST DOCS: {len(test_docs)}")
+
+
+def retrieve(state: GraphState):
+
+    print("[1] Retrieving Documents")
+
+    question = state["question"]
+
+    documents = retriever.invoke(question)
+
+    print(f"→ Retrieved {len(documents)} documents")
+
+    return {
+        "question": question,
+        "documents": documents,
+        "generation": state.get("generation", ""),
+        "hallucination": state.get("hallucination", "")
+    }
+
+
+def grade_documents(state: GraphState):
+
+    print("\n[2] Checking Document Relevance")
+
+    question = state["question"]
+
+    documents = state["documents"]
+
+    filtered_docs = []
+
+    for i, doc in enumerate(documents):
+
+        prompt = f"""
+        You are checking document relevance.
+
+        Document:
+        {doc.page_content}
+
+        Question:
+        {question}
+
+        If relevant respond only:
+        yes
+
+        Otherwise respond only:
+        no
+        """
+
+        response = llm.invoke(prompt)
+
+        grade = response.content.strip().lower()
+
+        print(f"→ Document {i+1}: {grade.upper()}")
+
+        if "yes" in grade:
+            filtered_docs.append(doc)
+
+    return {
+        "question": question,
+        "documents": filtered_docs,
+        "generation": state.get("generation", ""),
+        "hallucination": state.get("hallucination", ""),
+        "rewritten": state.get("rewritten", False)
+    }
+
+
+def rewrite_query(state: GraphState):
+
+    print("\n[3] Rewriting Query")
+
+    question = state["question"]
+
+    prompt = f"""
+    Rewrite the question into ONE short search query.
+
+    Question:
+    {question}
+
+    Search Query:
+    """
+
+    response = llm.invoke(prompt)
+
+    better_question = response.content.strip()
+
+    better_question = "[REWRITTEN] " + better_question
+
+    print(f"→ New Query: {better_question}")
+
+    return {
+        "question": better_question,
+        "documents": [],
+        "generation": "",
+        "hallucination": ""
+    }
+
+
+def route_documents(state: GraphState):
+
+    print("\n[4] Deciding Next Step")
+
+
+    documents = state["documents"]
+
+    question = state["question"]
+
+    if "[REWRITTEN]" in question:
+
+        print("Max retry reached")
+        print("Switching to web search")
+
+        return "websearch"
+
+    if len(documents) == 0:
+
+        print("→ No relevant documents found")
+        print("→ Rewriting query")
+
+        return "rewrite"
+
+    print("Relevant documents found")
+    print("Generating answer")
+
+    return "generate"
+
+def web_search(state: GraphState):
+
+    print("\n[5] Web Search Fallback")
+
+    question = state["question"]
+
+    results = web_search_tool.invoke(question)
+
+    web_results = "\n\n".join(
+        [result["content"] for result in results]
+    )
+
+    print("Web results retrieved successfully")
+
+    return {
+        "question": question,
+        "documents": [],
+        "generation": web_results,
+        "hallucination": "no"
+    }
+
+
+def generate(state: GraphState):
+
+    print("\n[6] Generating Answer")
+
+    question = state["question"]
+
+    documents = state["documents"]
+
+    docs_content = "\n\n".join(
+        [doc.page_content for doc in documents]
+    )
+
+    prompt = f"""
+    Answer the question ONLY using the provided context.
+
+    Context:
+    {docs_content}
+
+    Question:
+    {question}
+
+    Answer:
+    """
+
+    response = llm.invoke(prompt)
+
+    print("→ Answer generated successfully")
+
+    return {
+        "question": question,
+        "documents": documents,
+        "generation": response.content,
+        "hallucination": state.get("hallucination", ""),
+        "rewritten": state.get("rewritten", False)
+    }
+
+
+
+def check_hallucination(state: GraphState):
+
+    print("\n[7] Verifying Response")
+
+    documents = state["documents"]
+
+    generation = state["generation"]
+
+    docs_content = "\n\n".join(
+        [doc.page_content for doc in documents]
+    )
+
+    prompt = f"""
+    You are checking whether the answer is supported by the context.
+
+    Context:
+    {docs_content}
+
+    Answer:
+    {generation}
+
+    If supported respond only:
+    yes
+
+    Otherwise respond only:
+    no
+    """
+
+    response = llm.invoke(prompt)
+
+    verdict = response.content.strip().lower()
+
+    print(f"→ Grounded in context: {verdict.upper()}")
+
+    return {
+        "question": state["question"],
+        "documents": documents,
+        "generation": generation,
+        "hallucination": verdict,
+        "rewritten": state.get("rewritten", False)
+    }
