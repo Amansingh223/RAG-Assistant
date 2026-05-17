@@ -43,12 +43,15 @@ DB_PATH = os.path.join(BASE_DIR, "langgraph_db")
 
 print(f"\nDB PATH: {DB_PATH}")
 
+if not os.path.exists(DB_PATH):
 
-# Vector Store
+    os.makedirs(DB_PATH)
+
 vectorstore = Chroma(
     persist_directory=DB_PATH,
     embedding_function=embeddings
 )
+
 
 
 # Retriever
@@ -57,10 +60,6 @@ retriever = vectorstore.as_retriever(
 )
 
 
-# Test Vector DB
-test_docs = retriever.invoke("LangGraph")
-
-print(f"\nTEST DOCS: {len(test_docs)}")
 
 
 def retrieve(state: GraphState):
