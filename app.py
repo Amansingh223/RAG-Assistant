@@ -1,14 +1,14 @@
 import streamlit as st
 import requests
 
-API_URL = "https://rag-assistant.onrender.com"
+API_URL = "rag-assistant-production-365f.up.railway.app"
 
 st.set_page_config(
     page_title="RAG Assistant",
     page_icon="🤖"
 )
 
-st.title("🤖 RAG Assistant")
+st.title("RAG Assistant")
 
 st.write(
     "Ask questions about LangChain, LangGraph, FastAPI, etc."
