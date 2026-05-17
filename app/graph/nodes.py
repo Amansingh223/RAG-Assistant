@@ -9,30 +9,40 @@ from langchain_community.vectorstores import Chroma
 from app.graph.state import GraphState
 
 
-# Load environment variables
+# ==========================================
+# LOAD ENVIRONMENT VARIABLES
+# ==========================================
 load_dotenv()
 
 
-# LLM Model
+# ==========================================
+# LLM MODEL
+# ==========================================
 llm = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY"),
     model="llama-3.1-8b-instant"
 )
 
 
-# Tavily Web Search
+# ==========================================
+# TAVILY WEB SEARCH
+# ==========================================
 web_search_tool = TavilySearchResults(
     max_results=3
 )
 
 
-# Embeddings
+# ==========================================
+# EMBEDDINGS
+# ==========================================
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 
-# Database Path
+# ==========================================
+# DATABASE PATH
+# ==========================================
 BASE_DIR = os.path.dirname(
     os.path.dirname(
         os.path.dirname(__file__)
@@ -43,9 +53,13 @@ DB_PATH = os.path.join(BASE_DIR, "langgraph_db")
 
 print(f"\nDB PATH: {DB_PATH}")
 
+
+
 if not os.path.exists(DB_PATH):
 
     os.makedirs(DB_PATH)
+
+
 
 vectorstore = Chroma(
     persist_directory=DB_PATH,
@@ -53,13 +67,9 @@ vectorstore = Chroma(
 )
 
 
-
-# Retriever
 retriever = vectorstore.as_retriever(
     search_kwargs={"k": 3}
 )
-
-
 
 
 def retrieve(state: GraphState):
@@ -80,8 +90,6 @@ def retrieve(state: GraphState):
         "rewritten": state.get("rewritten", False)
     }
 
-
-
 def grade_documents(state: GraphState):
 
     print("\n[2] Checking Document Relevance")
@@ -94,7 +102,7 @@ def grade_documents(state: GraphState):
 
     for i, doc in enumerate(documents):
 
-        prompt = f"""
+               prompt = f"""
         You are checking document relevance.
 
         Document:
@@ -103,10 +111,10 @@ def grade_documents(state: GraphState):
         Question:
         {question}
 
-        If the document is relevant respond only:
+        If the document is relevant respond ONLY with:
         yes
 
-        Otherwise respond only:
+        Otherwise respond ONLY with:
         no
         """
 
@@ -114,9 +122,14 @@ def grade_documents(state: GraphState):
 
         grade = response.content.strip().lower()
 
+        # Clean output
+        grade = grade.replace(".", "").strip()
+
         print(f"→ Document {i+1}: {grade.upper()}")
 
-        if "yes" in grade:
+        # STRICT CHECK
+        if grade == "yes":
+
             filtered_docs.append(doc)
 
     return {
@@ -126,7 +139,6 @@ def grade_documents(state: GraphState):
         "hallucination": state.get("hallucination", ""),
         "rewritten": state.get("rewritten", False)
     }
-
 
 def rewrite_query(state: GraphState):
 
@@ -159,6 +171,7 @@ def rewrite_query(state: GraphState):
         "rewritten": True
     }
 
+
 def route_documents(state: GraphState):
 
     print("\n[4] Deciding Next Step")
@@ -167,8 +180,10 @@ def route_documents(state: GraphState):
 
     rewritten = state.get("rewritten", False)
 
+    # No relevant docs found
     if len(documents) == 0:
 
+        # Already rewritten once → web search
         if rewritten:
 
             print("Max retry reached")
@@ -186,6 +201,8 @@ def route_documents(state: GraphState):
 
     return "generate"
 
+
+
 def web_search(state):
 
     print("\n[5] Web Search Fallback")
@@ -200,7 +217,7 @@ def web_search(state):
 
         web_context = ""
 
-        # If Tavily returns dictionary
+        # Tavily dictionary response
         if isinstance(results, dict):
 
             if "results" in results:
@@ -211,7 +228,7 @@ def web_search(state):
 
                     web_context += content[:500] + "\n\n"
 
-        # If Tavily returns list
+        # Tavily list response
         elif isinstance(results, list):
 
             for item in results:
@@ -222,6 +239,7 @@ def web_search(state):
 
                     web_context += content[:500] + "\n\n"
 
+        # Empty fallback
         if web_context.strip() == "":
 
             web_context = "No useful web results found."
@@ -235,7 +253,9 @@ def web_search(state):
         Web Context:
         {web_context}
 
-        Provide a concise answer.
+        Provide a detailed, well-structured, and easy-to-understand answer.
+        Use bullet points when helpful.
+        
         """
 
         response = llm.invoke(prompt)
@@ -261,6 +281,7 @@ def web_search(state):
             "hallucination": "no",
             "rewritten": True
         }
+
 
 def generate(state: GraphState):
 
@@ -291,7 +312,8 @@ def generate(state: GraphState):
     Question:
     {question}
 
-    Provide a concise and relevant answer.
+    Provide a detailed, well-structured, and easy-to-understand answer.
+    Use bullet points when helpful.
     """
 
     response = llm.invoke(prompt)
@@ -305,7 +327,6 @@ def generate(state: GraphState):
         "hallucination": state.get("hallucination", ""),
         "rewritten": state.get("rewritten", False)
     }
-
 
 def check_hallucination(state: GraphState):
 
@@ -336,16 +357,18 @@ def check_hallucination(state: GraphState):
     Answer:
     {generation}
 
-    If supported respond only:
+    If supported respond ONLY with:
     yes
 
-    Otherwise respond only:
+    Otherwise respond ONLY with:
     no
     """
 
     response = llm.invoke(prompt)
 
     verdict = response.content.strip().lower()
+
+    verdict = verdict.replace(".", "").strip()
 
     print(f"Grounded in context: {verdict.upper()}")
 
