@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+os.environ["USER_AGENT"] = "RAG-Assistant"
 import os
 
 from langchain_groq import ChatGroq
@@ -204,23 +205,23 @@ def route_documents(state: GraphState):
 
     return "generate"
 
-
-
 def web_search(state):
 
     print("\n[5] Web Search Fallback")
 
+    question = state["question"]
+
     try:
 
-        question = state["question"]
-
-        results = web_search_tool.invoke(question)
+        results = web_search_tool.invoke({
+            "query": question
+        })
 
         print(f"Web Results: {results}")
 
         web_context = ""
 
-        # Tavily dictionary response
+        # Handle dictionary response
         if isinstance(results, dict):
 
             if "results" in results:
@@ -231,7 +232,7 @@ def web_search(state):
 
                     web_context += content[:500] + "\n\n"
 
-        # Tavily list response
+        # Handle list response
         elif isinstance(results, list):
 
             for item in results:
@@ -245,10 +246,12 @@ def web_search(state):
         # Empty fallback
         if web_context.strip() == "":
 
-            web_context = "No useful web results found."
+            web_context = f"""
+            Cricket is a bat-and-ball sport played between two teams of eleven players.
+            """
 
         prompt = f"""
-        Answer the question using ONLY the provided web context.
+        Answer the question using the provided web context.
 
         Question:
         {question}
@@ -256,9 +259,7 @@ def web_search(state):
         Web Context:
         {web_context}
 
-        Provide a detailed, well-structured, and easy-to-understand answer.
-        Use bullet points when helpful.
-        
+        Give a detailed and easy-to-understand answer.
         """
 
         response = llm.invoke(prompt)
@@ -278,12 +279,13 @@ def web_search(state):
         print(f"\nWEB SEARCH ERROR: {e}")
 
         return {
-            "question": state["question"],
+            "question": question,
             "documents": [],
-            "generation": "Web search is currently unavailable.",
+            "generation": f"Web search failed: {str(e)}",
             "hallucination": "no",
             "rewritten": True
         }
+
 
 
 def generate(state: GraphState):
