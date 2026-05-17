@@ -1,17 +1,18 @@
 import streamlit as st
 import requests
 
-
+API_URL = "https://rag-assistant.onrender.com"
 
 st.set_page_config(
-    page_title=" RAG Assistant",
+    page_title="RAG Assistant",
     page_icon="🤖"
 )
 
-st.title("RAG Assistant")
+st.title("🤖 RAG Assistant")
 
-st.write("Ask questions about LangChain, LangGraph, FastAPI, etc.")
-
+st.write(
+    "Ask questions about LangChain, LangGraph, FastAPI, etc."
+)
 
 if "answer" not in st.session_state:
     st.session_state.answer = ""
@@ -19,37 +20,34 @@ if "answer" not in st.session_state:
 if "question" not in st.session_state:
     st.session_state.question = ""
 
-
 question = st.text_input(
     "Enter your question:"
 )
-
 
 if st.button("Ask"):
 
     if question:
 
-        response = requests.post(
-            "http://127.0.0.1:8000/query",
-            json={
-                "question": question
-            }
-        )
+        with st.spinner("Generating response..."):
 
-        data = response.json()
+            response = requests.post(
+                f"{API_URL}/query",
+                json={
+                    "question": question
+                }
+            )
 
-        st.session_state.answer = data["answer"]
+            data = response.json()
 
-        st.session_state.question = question
+            st.session_state.answer = data["answer"]
 
+            st.session_state.question = question
 
 if st.session_state.answer:
 
     st.subheader("Answer")
 
     st.write(st.session_state.answer)
-
-if st.session_state.answer:
 
     st.subheader("Feedback")
 
@@ -65,7 +63,7 @@ if st.session_state.answer:
     if st.button("Submit Feedback"):
 
         requests.post(
-            "http://127.0.0.1:8000/feedback",
+            f"{API_URL}/feedback",
             json={
                 "question": st.session_state.question,
                 "answer": st.session_state.answer,
@@ -74,4 +72,6 @@ if st.session_state.answer:
             }
         )
 
-        st.success("Feedback submitted successfully!")
+        st.success(
+            "Feedback submitted successfully!"
+        )
