@@ -10,40 +10,24 @@ from langchain_community.vectorstores import Chroma
 from app.graph.state import GraphState
 
 
-# ==========================================
-# LOAD ENVIRONMENT VARIABLES
-# ==========================================
 load_dotenv()
 
-
-# ==========================================
-# LLM MODEL
-# ==========================================
 llm = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY"),
     model="llama-3.1-8b-instant"
 )
 
 
-# ==========================================
-# TAVILY WEB SEARCH
-# ==========================================
+
 web_search_tool = TavilySearchResults(
     max_results=3
 )
 
-
-# ==========================================
-# EMBEDDINGS
-# ==========================================
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 
-# ==========================================
-# DATABASE PATH
-# ==========================================
 BASE_DIR = os.path.dirname(
     os.path.dirname(
         os.path.dirname(__file__)
