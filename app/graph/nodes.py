@@ -188,42 +188,46 @@ def route_documents(state: GraphState):
 
 def web_search(state):
 
-    try:
+    print("\n[5] Web Search Fallback")
 
-        print("\n[5] Web Search Fallback")
+    try:
 
         question = state["question"]
 
         results = web_search_tool.invoke(question)
 
-        filtered_results = []
+        print(f"Web Results: {results}")
 
-        for result in results:
+        web_context = ""
 
-            if isinstance(result, dict):
+        # If Tavily returns dictionary
+        if isinstance(results, dict):
 
-                content = result.get("content", "")
+            if "results" in results:
 
-                if content:
+                for item in results["results"]:
 
-                    filtered_results.append(
-                        content[:500]
-                    )
+                    content = item.get("content", "")
 
-        if len(filtered_results) == 0:
+                    web_context += content[:500] + "\n\n"
 
-            return {
-                "question": question,
-                "documents": [],
-                "generation": "No relevant web results found.",
-                "hallucination": "no",
-                "rewritten": True
-            }
+        # If Tavily returns list
+        elif isinstance(results, list):
 
-        web_context = "\n\n".join(filtered_results)
+            for item in results:
+
+                if isinstance(item, dict):
+
+                    content = item.get("content", "")
+
+                    web_context += content[:500] + "\n\n"
+
+        if web_context.strip() == "":
+
+            web_context = "No useful web results found."
 
         prompt = f"""
-        Answer the question using ONLY the provided web search context.
+        Answer the question using ONLY the provided web context.
 
         Question:
         {question}
@@ -231,7 +235,7 @@ def web_search(state):
         Web Context:
         {web_context}
 
-        Provide a short and relevant answer only.
+        Provide a concise answer.
         """
 
         response = llm.invoke(prompt)
@@ -257,8 +261,6 @@ def web_search(state):
             "hallucination": "no",
             "rewritten": True
         }
-
-
 
 def generate(state: GraphState):
 
