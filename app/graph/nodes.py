@@ -102,7 +102,7 @@ def grade_documents(state: GraphState):
 
     for i, doc in enumerate(documents):
 
-               prompt = f"""
+        prompt = f"""
         You are checking document relevance.
 
         Document:
