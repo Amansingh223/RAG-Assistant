@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_URL = "rag-assistant-production-365f.up.railway.app"
+API_URL = "https://rag-assistant-production-365f.up.railway.app"
 
 st.set_page_config(
     page_title="RAG Assistant",
