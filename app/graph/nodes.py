@@ -187,49 +187,78 @@ def route_documents(state: GraphState):
 
     return "generate"
 
-def web_search(state: GraphState):
+def web_search(state):
 
-    print("\n[5] Web Search Fallback")
+    try:
 
-    question = state["question"]
+        print("\n[5] Web Search Fallback")
 
-    results = web_search_tool.invoke(question)
+        question = state["question"]
 
-    filtered_results = []
+        results = web_search_tool.invoke(question)
 
-    for result in results:
+        filtered_results = []
 
-        if "content" in result:
+        for result in results:
 
-            filtered_results.append(
-                result["content"][:500]
-            )
+            if isinstance(result, dict):
 
-    web_context = "\n\n".join(filtered_results)
+                content = result.get("content", "")
 
-    prompt = f"""
-    Answer the question using ONLY the provided web search context.
+                if content:
 
-    Question:
-    {question}
+                    filtered_results.append(
+                        content[:500]
+                    )
 
-    Web Context:
-    {web_context}
+        if len(filtered_results) == 0:
 
-    Provide a short and relevant answer only.
-    """
+            return {
+                "question": question,
+                "documents": [],
+                "generation": "No relevant web results found.",
+                "hallucination": "no",
+                "rewritten": True
+            }
 
-    response = llm.invoke(prompt)
+        web_context = "\n\n".join(filtered_results)
 
-    print("Web answer generated successfully")
+        prompt = f"""
+        Answer the question using ONLY the provided web search context.
 
-    return {
-        "question": question,
-        "documents": [],
-        "generation": response.content,
-        "hallucination": "no",
-        "rewritten": True
-    }
+        Question:
+        {question}
+
+        Web Context:
+        {web_context}
+
+        Provide a short and relevant answer only.
+        """
+
+        response = llm.invoke(prompt)
+
+        print("Web answer generated successfully")
+
+        return {
+            "question": question,
+            "documents": [],
+            "generation": response.content,
+            "hallucination": "no",
+            "rewritten": True
+        }
+
+    except Exception as e:
+
+        print(f"\nWEB SEARCH ERROR: {e}")
+
+        return {
+            "question": state["question"],
+            "documents": [],
+            "generation": "Web search is currently unavailable.",
+            "hallucination": "no",
+            "rewritten": True
+        }
+
 
 
 def generate(state: GraphState):
