@@ -9,6 +9,7 @@ from langchain_community.vectorstores import Chroma
 from app.graph.state import GraphState
 
 
+# Load environment variables
 load_dotenv()
 
 
@@ -19,7 +20,7 @@ llm = ChatGroq(
 )
 
 
-# Tavily Search
+# Tavily Web Search
 web_search_tool = TavilySearchResults(
     max_results=3
 )
@@ -31,7 +32,7 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 
-# DB Path
+# Database Path
 BASE_DIR = os.path.dirname(
     os.path.dirname(
         os.path.dirname(__file__)
@@ -56,7 +57,7 @@ retriever = vectorstore.as_retriever(
 )
 
 
-# Test DB
+# Test Vector DB
 test_docs = retriever.invoke("LangGraph")
 
 print(f"\nTEST DOCS: {len(test_docs)}")
@@ -64,7 +65,7 @@ print(f"\nTEST DOCS: {len(test_docs)}")
 
 def retrieve(state: GraphState):
 
-    print("[1] Retrieving Documents")
+    print("\n[1] Retrieving Documents")
 
     question = state["question"]
 
@@ -76,8 +77,10 @@ def retrieve(state: GraphState):
         "question": question,
         "documents": documents,
         "generation": state.get("generation", ""),
-        "hallucination": state.get("hallucination", "")
+        "hallucination": state.get("hallucination", ""),
+        "rewritten": state.get("rewritten", False)
     }
+
 
 
 def grade_documents(state: GraphState):
@@ -101,7 +104,7 @@ def grade_documents(state: GraphState):
         Question:
         {question}
 
-        If relevant respond only:
+        If the document is relevant respond only:
         yes
 
         Otherwise respond only:
@@ -147,36 +150,35 @@ def rewrite_query(state: GraphState):
 
     better_question = "[REWRITTEN] " + better_question
 
-    print(f"→ New Query: {better_question}")
+    print(f"New Query: {better_question}")
 
     return {
         "question": better_question,
         "documents": [],
         "generation": "",
-        "hallucination": ""
+        "hallucination": "",
+        "rewritten": True
     }
-
 
 def route_documents(state: GraphState):
 
     print("\n[4] Deciding Next Step")
 
-
     documents = state["documents"]
 
-    question = state["question"]
-
-    if "[REWRITTEN]" in question:
-
-        print("Max retry reached")
-        print("Switching to web search")
-
-        return "websearch"
+    rewritten = state.get("rewritten", False)
 
     if len(documents) == 0:
 
-        print("→ No relevant documents found")
-        print("→ Rewriting query")
+        if rewritten:
+
+            print("Max retry reached")
+            print("Switching to web search")
+
+            return "websearch"
+
+        print("No relevant documents found")
+        print("Rewriting query")
 
         return "rewrite"
 
@@ -193,17 +195,40 @@ def web_search(state: GraphState):
 
     results = web_search_tool.invoke(question)
 
-    web_results = "\n\n".join(
-        [result["content"] for result in results]
-    )
+    filtered_results = []
 
-    print("Web results retrieved successfully")
+    for result in results:
+
+        if "content" in result:
+
+            filtered_results.append(
+                result["content"][:500]
+            )
+
+    web_context = "\n\n".join(filtered_results)
+
+    prompt = f"""
+    Answer the question using ONLY the provided web search context.
+
+    Question:
+    {question}
+
+    Web Context:
+    {web_context}
+
+    Provide a short and relevant answer only.
+    """
+
+    response = llm.invoke(prompt)
+
+    print("Web answer generated successfully")
 
     return {
         "question": question,
         "documents": [],
-        "generation": web_results,
-        "hallucination": "no"
+        "generation": response.content,
+        "hallucination": "no",
+        "rewritten": True
     }
 
 
@@ -215,9 +240,17 @@ def generate(state: GraphState):
 
     documents = state["documents"]
 
-    docs_content = "\n\n".join(
-        [doc.page_content for doc in documents]
-    )
+    docs_content = ""
+
+    for doc in documents:
+
+        if hasattr(doc, "page_content"):
+
+            docs_content += doc.page_content + "\n\n"
+
+        else:
+
+            docs_content += str(doc) + "\n\n"
 
     prompt = f"""
     Answer the question ONLY using the provided context.
@@ -228,12 +261,12 @@ def generate(state: GraphState):
     Question:
     {question}
 
-    Answer:
+    Provide a concise and relevant answer.
     """
 
     response = llm.invoke(prompt)
 
-    print("→ Answer generated successfully")
+    print("Answer generated successfully")
 
     return {
         "question": question,
@@ -244,7 +277,6 @@ def generate(state: GraphState):
     }
 
 
-
 def check_hallucination(state: GraphState):
 
     print("\n[7] Verifying Response")
@@ -253,9 +285,17 @@ def check_hallucination(state: GraphState):
 
     generation = state["generation"]
 
-    docs_content = "\n\n".join(
-        [doc.page_content for doc in documents]
-    )
+    docs_content = ""
+
+    for doc in documents:
+
+        if hasattr(doc, "page_content"):
+
+            docs_content += doc.page_content + "\n\n"
+
+        else:
+
+            docs_content += str(doc) + "\n\n"
 
     prompt = f"""
     You are checking whether the answer is supported by the context.
@@ -277,7 +317,7 @@ def check_hallucination(state: GraphState):
 
     verdict = response.content.strip().lower()
 
-    print(f"→ Grounded in context: {verdict.upper()}")
+    print(f"Grounded in context: {verdict.upper()}")
 
     return {
         "question": state["question"],
