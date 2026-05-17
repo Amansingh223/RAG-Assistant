@@ -84,7 +84,7 @@ def retrieve(state: GraphState):
 
     documents = retriever.invoke(question)
 
-    print(f"→ Retrieved {len(documents)} documents")
+    print(f"-> Retrieved {len(documents)} documents")
 
     return {
         "question": question,
@@ -129,7 +129,7 @@ def grade_documents(state: GraphState):
         # Clean output
         grade = grade.replace(".", "").strip()
 
-        print(f"→ Document {i+1}: {grade.upper()}")
+        print(f"-> Document {i+1}: {grade.upper()}")
 
         # STRICT CHECK
         if grade == "yes":

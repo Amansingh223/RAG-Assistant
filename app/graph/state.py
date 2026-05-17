@@ -6,3 +6,5 @@ class GraphState(TypedDict):
     question: str
     documents: List[Document]
     generation: str
+    hallucination: str
+    rewritten: bool
