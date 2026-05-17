@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
-os.environ["USER_AGENT"] = "RAG-Assistant"
 import os
+os.environ["USER_AGENT"] = "RAG-Assistant"
 
 from langchain_groq import ChatGroq
 from langchain_community.tools.tavily_search import TavilySearchResults
